@@ -4,12 +4,10 @@ import { semantic, textStyles, spacing, radius } from '@/theme';
 
 /**
  * Welcome screen — warm onboarding entry point.
- * 
+ *
  * TODO:
  * - Add 3-slide onboarding carousel (Record → Preserve → Unlock)
  * - Add warm illustration/hero image
- * - Add "Sign in" and "Get started" buttons
- * - Add "Join a family" for invited writers
  */
 export default function Welcome() {
   const router = useRouter();
@@ -30,32 +28,23 @@ export default function Welcome() {
       </View>
 
       <View style={styles.actions}>
-        <Pressable 
-          style={styles.primaryButton} 
-          onPress={() => {
-            // TODO: Navigate to sign up flow
-            // router.push('/(auth)/signup');
-          }}
+        <Pressable
+          style={styles.primaryButton}
+          onPress={() => router.push('/(auth)/sign-up')}
         >
           <Text style={styles.primaryButtonText}>Get Started</Text>
         </Pressable>
 
-        <Pressable 
+        <Pressable
           style={styles.secondaryButton}
-          onPress={() => {
-            // TODO: Navigate to sign in
-            // router.push('/(auth)/signin');
-          }}
+          onPress={() => router.push('/(auth)/sign-in')}
         >
           <Text style={styles.secondaryButtonText}>I have an account</Text>
         </Pressable>
 
-        <Pressable 
+        <Pressable
           style={styles.linkButton}
-          onPress={() => {
-            // TODO: Navigate to join family flow
-            // router.push('/(auth)/join');
-          }}
+          onPress={() => router.push('/(auth)/join')}
         >
           <Text style={styles.linkButtonText}>Join a family with invite code</Text>
         </Pressable>

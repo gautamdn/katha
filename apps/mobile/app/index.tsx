@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { semantic, textStyles, spacing } from '@/theme';
+import { useAuthStore } from '@/stores/authStore';
 
 /**
  * Root index — checks auth state and redirects.
@@ -9,18 +10,26 @@ import { semantic, textStyles, spacing } from '@/theme';
  */
 export default function Index() {
   const router = useRouter();
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const profile = useAuthStore((s) => s.profile);
 
   useEffect(() => {
-    // TODO: Check Supabase auth session
-    // If authenticated → router.replace('/(tabs)/home')
-    // If not → router.replace('/(auth)/welcome')
-    
-    const timeout = setTimeout(() => {
-      router.replace('/(auth)/welcome');
-    }, 1500);
+    if (isLoading) return;
 
-    return () => clearTimeout(timeout);
-  }, []);
+    if (!isAuthenticated) {
+      router.replace('/(auth)/welcome');
+    } else if (!profile?.family_id) {
+      // Authenticated but no family — send to create or join
+      if (profile?.role === 'guardian') {
+        router.replace('/(auth)/create-family');
+      } else {
+        router.replace('/(auth)/join');
+      }
+    } else {
+      router.replace('/(tabs)/home');
+    }
+  }, [isLoading, isAuthenticated, profile]);
 
   return (
     <View style={styles.container}>

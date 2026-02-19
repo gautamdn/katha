@@ -7,6 +7,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
 import { semantic } from '@/theme';
+import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/authStore';
+import * as api from '@/lib/api';
 
 // Prevent splash screen from hiding until fonts are loaded
 SplashScreen.preventAutoHideAsync();
@@ -21,6 +24,36 @@ const queryClient = new QueryClient({
 });
 
 export default function RootLayout() {
+  const setSession = useAuthStore((s) => s.setSession);
+  const setProfile = useAuthStore((s) => s.setProfile);
+  const setLoading = useAuthStore((s) => s.setLoading);
+
+  // Bootstrap auth state from persisted session + listen for changes
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) {
+        const profile = await api.getProfile(session.user.id);
+        setProfile(profile);
+      }
+      setLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setSession(session);
+      if (session?.user) {
+        const profile = await api.getProfile(session.user.id);
+        setProfile(profile);
+      } else {
+        setProfile(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   const [fontsLoaded, fontError] = useFonts({
     // TODO: Add actual font files to assets/fonts/
     // 'PlayfairDisplay-Regular': require('@/assets/fonts/PlayfairDisplay-Regular.ttf'),
