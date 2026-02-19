@@ -1,0 +1,66 @@
+{
+  "expo": {
+    "name": "Katha",
+    "slug": "katha",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "katha",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFF8F0"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.katha.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Katha needs microphone access to record your voice stories for your family.",
+        "NSPhotoLibraryUsageDescription": "Katha needs photo access to attach memories to your stories.",
+        "NSCameraUsageDescription": "Katha needs camera access to take photos for your stories."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#FFF8F0"
+      },
+      "package": "com.katha.app",
+      "permissions": [
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "CAMERA"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Katha needs microphone access to record your voice stories."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Katha needs photo access to attach memories to your stories.",
+          "cameraPermission": "Katha needs camera access to take photos for your stories."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#F59E0B"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
