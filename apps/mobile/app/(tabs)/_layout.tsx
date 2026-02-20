@@ -40,14 +40,14 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="record"
         options={{
-          title: 'Record',
-          // tabBarIcon: ... (big mic icon)
+          title: 'Write',
+          // tabBarIcon: ...
         }}
       />
       <Tabs.Screen
         name="capsules"
         options={{
-          title: 'Capsules',
+          title: 'My Stories',
           // tabBarIcon: ...
         }}
       />

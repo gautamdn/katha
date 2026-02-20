@@ -1,7 +1,8 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
 import * as api from '@/lib/api';
 import { createFamilySchema, joinFamilySchema } from '@shared/schema';
+import { queryKeys } from '@shared/queryKeys';
 
 export function useFamily() {
   const user = useAuthStore((s) => s.user);
@@ -59,4 +60,15 @@ export function useFamily() {
   });
 
   return { createFamily, joinFamily };
+}
+
+export function useFamilyInfo() {
+  const profile = useAuthStore((s) => s.profile);
+  const familyId = profile?.family_id;
+
+  return useQuery({
+    queryKey: queryKeys.families.detail(familyId ?? ''),
+    queryFn: () => api.getFamily(familyId!),
+    enabled: !!familyId,
+  });
 }

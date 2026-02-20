@@ -1,6 +1,13 @@
 import { supabase } from './supabase';
-import type { Profile, Family } from '@shared/types';
-import type { UserRole } from '@shared/types';
+import type {
+  Profile,
+  Family,
+  Child,
+  Capsule,
+  CapsuleWithWriter,
+  AIPolishResult,
+  AIMetadataResult,
+} from '@shared/types';
 
 // ─── Auth ───────────────────────────────────────────────
 
@@ -118,4 +125,238 @@ export async function joinFamily(params: {
   });
 
   return family as Family;
+}
+
+export async function getFamily(familyId: string): Promise<Family> {
+  const { data, error } = await supabase
+    .from('families')
+    .select('*')
+    .eq('id', familyId)
+    .single();
+
+  if (error) throw error;
+  return data as Family;
+}
+
+export async function getFamilyMembers(familyId: string): Promise<Profile[]> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('family_id', familyId)
+    .order('created_at');
+
+  if (error) throw error;
+  return data as Profile[];
+}
+
+// ─── Children ──────────────────────────────────────────
+
+export async function getChildren(familyId: string): Promise<Child[]> {
+  const { data, error } = await supabase
+    .from('children')
+    .select('*')
+    .eq('family_id', familyId)
+    .order('created_at');
+
+  if (error) throw error;
+  return data as Child[];
+}
+
+export async function createChild(params: {
+  familyId: string;
+  name: string;
+  dateOfBirth: string;
+}): Promise<Child> {
+  const { data, error } = await supabase
+    .from('children')
+    .insert({
+      family_id: params.familyId,
+      name: params.name,
+      date_of_birth: params.dateOfBirth,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as Child;
+}
+
+// ─── Capsules ──────────────────────────────────────────
+
+export async function getFamilyCapsules(
+  familyId: string,
+  options?: { limit?: number; offset?: number },
+): Promise<CapsuleWithWriter[]> {
+  const limit = options?.limit ?? 20;
+  const offset = options?.offset ?? 0;
+
+  const { data, error } = await supabase
+    .from('capsules')
+    .select(
+      `*, writer:profiles!writer_id(display_name, avatar_url, relationship_label), recipient:children!child_id(name)`,
+    )
+    .eq('family_id', familyId)
+    .eq('is_draft', false)
+    .order('published_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error) throw error;
+
+  return (data ?? []).map((c: any) => ({
+    ...c,
+    photos: [],
+    reactions: [],
+  })) as CapsuleWithWriter[];
+}
+
+export async function getWriterCapsules(writerId: string): Promise<Capsule[]> {
+  const { data, error } = await supabase
+    .from('capsules')
+    .select('*')
+    .eq('writer_id', writerId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data as Capsule[];
+}
+
+export async function getCapsule(
+  capsuleId: string,
+): Promise<CapsuleWithWriter> {
+  const { data, error } = await supabase
+    .from('capsules')
+    .select(
+      `*, writer:profiles!writer_id(display_name, avatar_url, relationship_label), recipient:children!child_id(name)`,
+    )
+    .eq('id', capsuleId)
+    .single();
+
+  if (error) throw error;
+
+  return { ...data, photos: [], reactions: [] } as CapsuleWithWriter;
+}
+
+export async function createCapsule(params: {
+  writerId: string;
+  familyId: string;
+  rawText: string;
+  childId?: string | null;
+}): Promise<Capsule> {
+  const { data, error } = await supabase
+    .from('capsules')
+    .insert({
+      writer_id: params.writerId,
+      family_id: params.familyId,
+      raw_text: params.rawText,
+      child_id: params.childId ?? null,
+      is_draft: true,
+      unlock_type: 'immediate',
+      is_unlocked: false,
+      is_surprise: false,
+      is_private: false,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as Capsule;
+}
+
+export async function updateCapsule(
+  capsuleId: string,
+  updates: Partial<
+    Pick<
+      Capsule,
+      | 'raw_text'
+      | 'polished_text'
+      | 'title'
+      | 'excerpt'
+      | 'category'
+      | 'mood'
+      | 'read_time_minutes'
+      | 'child_id'
+      | 'is_draft'
+      | 'published_at'
+    >
+  >,
+): Promise<Capsule> {
+  const { data, error } = await supabase
+    .from('capsules')
+    .update(updates)
+    .eq('id', capsuleId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as Capsule;
+}
+
+export async function publishCapsule(
+  capsuleId: string,
+  aiData: {
+    polishedText: string;
+    title: string;
+    excerpt: string;
+    category: string;
+    mood: string;
+    readTimeMinutes: number;
+  },
+): Promise<Capsule> {
+  const { data, error } = await supabase
+    .from('capsules')
+    .update({
+      polished_text: aiData.polishedText,
+      title: aiData.title,
+      excerpt: aiData.excerpt,
+      category: aiData.category,
+      mood: aiData.mood,
+      read_time_minutes: aiData.readTimeMinutes,
+      is_draft: false,
+      is_unlocked: true,
+      published_at: new Date().toISOString(),
+    })
+    .eq('id', capsuleId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as Capsule;
+}
+
+export async function deleteCapsule(capsuleId: string): Promise<void> {
+  const { error } = await supabase
+    .from('capsules')
+    .delete()
+    .eq('id', capsuleId);
+
+  if (error) throw error;
+}
+
+// ─── AI (Edge Functions) ───────────────────────────────
+
+export async function polishText(params: {
+  text: string;
+  languagePreferences?: string[];
+}): Promise<AIPolishResult> {
+  const { data, error } = await supabase.functions.invoke('ai-polish', {
+    body: {
+      text: params.text,
+      language_preferences: params.languagePreferences,
+    },
+  });
+
+  if (error) throw error;
+  return data as AIPolishResult;
+}
+
+export async function generateMetadata(params: {
+  text: string;
+}): Promise<AIMetadataResult> {
+  const { data, error } = await supabase.functions.invoke(
+    'generate-metadata',
+    { body: { text: params.text } },
+  );
+
+  if (error) throw error;
+  return data as AIMetadataResult;
 }
