@@ -7,6 +7,9 @@
     "apps/mobile",
     "packages/shared"
   ],
+  "overrides": {
+    "react": "19.1.0"
+  },
   "scripts": {
     "dev": "cd apps/mobile && npx expo start",
     "ios": "cd apps/mobile && npx expo run:ios",
