@@ -8,10 +8,10 @@ Katha is a voice-first, time-capsule family legacy app. Grandparents and elders 
 
 ## Tech Stack
 
-- **Mobile:** React Native + Expo (SDK 52+), Expo Router (file-based routing)
+- **Mobile:** React Native + Expo (SDK 54), Expo Router v6 (file-based routing)
 - **State:** Zustand (global state) + TanStack React Query (server state)
 - **UI:** Custom design system — NO generic UI kits. Warm heritage-modern aesthetic.
-- **Animations:** React Native Reanimated 3 + Moti
+- **Animations:** React Native Reanimated 4 (Moti deferred to Phase 4)
 - **Audio:** expo-av for recording & playback
 - **Images:** expo-image-picker
 - **Backend:** Supabase (PostgreSQL + Auth + Storage + Edge Functions)
@@ -239,17 +239,24 @@ EXPO_PUBLIC_APP_NAME=Katha
 
 ## Development Phases
 
-### Phase 1: MVP (Current)
+### Phase 1: MVP (Current — mostly complete)
 Focus: Core writing and reading experience
 - [x] Project scaffold
-- [ ] Supabase setup (auth, database, storage, RLS policies)
-- [ ] Auth flow (sign up as Guardian, sign in)
-- [ ] Family creation & child profiles
-- [ ] Text capsule creation (write → AI polish → publish)
-- [ ] Capsule feed (home screen, list of published capsules)
-- [ ] Single capsule view
-- [ ] Writer profile page
-- [ ] Auto-save drafts (Zustand + AsyncStorage)
+- [x] Supabase setup (auth, database, storage, RLS policies)
+- [x] Auth flow (sign up as Guardian/Writer, sign in, sign out)
+- [x] Family creation (invite codes) & join family flow
+- [x] Text capsule creation (write → AI polish → publish pipeline)
+- [x] Capsule feed (home screen, FlatList of published capsules)
+- [x] Single capsule view (capsule/[id].tsx)
+- [x] Writer profile page (writer/[id].tsx)
+- [x] Auto-save drafts (Zustand + AsyncStorage, 2s debounce)
+- [x] Child profiles (add children, child selector on write screen)
+- [x] "My Stories" tab (drafts + published)
+- [x] Family screen (members, children, invite code)
+- [x] Profile screen (view/edit, sign out)
+- [x] generate-metadata Edge Function (Claude Haiku)
+- [ ] End-to-end testing of publish pipeline (needs AI keys configured)
+- [ ] Profile/family screens polish (e.g. avatar images)
 
 ### Phase 2: Voice & Time Capsules
 - [ ] Voice recording (expo-av)
@@ -285,3 +292,27 @@ Focus: Core writing and reading experience
 3. **Offline-first thinking:** Writers (grandparents) may have spotty internet. Drafts save locally. Audio records locally. Sync when connected.
 4. **Accessibility:** Large tap targets, large fonts by default, high contrast. These users may be elderly with vision/motor challenges.
 5. **Multi-language support:** The app UI should support LTR and RTL. Content can be in any language. AI preserves all languages.
+
+## RLS Architecture Notes
+
+Supabase RLS policies use a `SECURITY DEFINER` helper function to avoid infinite recursion:
+
+```sql
+-- profiles policies reference profiles → infinite recursion.
+-- Solution: bypass-RLS helper function.
+CREATE FUNCTION get_my_family_id() RETURNS UUID AS $$
+  SELECT family_id FROM profiles WHERE id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+```
+
+All family-scoped SELECT policies use `get_my_family_id()` instead of subquerying `profiles`.
+
+The `handle_new_user()` trigger requires `SET search_path = public` to resolve the `profiles` table and `user_role` enum.
+
+Migrations applied (in order):
+1. `001_initial_schema.sql` — tables, indexes, RLS, trigger
+2. `002_join_family_rpc.sql` — SECURITY DEFINER RPC for invite code lookup
+3. `003_fix_profile_select_rls.sql` — "Users can view own profile" policy
+4. `004_fix_rls_recursion.sql` — Replace recursive policies with `get_my_family_id()`
+5. `005_fix_trigger_function.sql` — Fix trigger search_path + error handling
+6. `006_fix_family_creator_select.sql` — Allow family creator to SELECT their family
