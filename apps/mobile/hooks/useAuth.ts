@@ -27,43 +27,63 @@ export function useAuth() {
     display_name: string;
     role: 'guardian' | 'writer';
   }): Promise<{ error?: string }> {
-    const validation = signUpSchema.safeParse(params);
-    if (!validation.success) {
-      return { error: validation.error.issues[0].message };
-    }
-
-    const { data, error } = await api.signUp(params);
-    if (error) return { error: friendlyError(error) };
-
-    // Session is set automatically by the auth listener in _layout.tsx,
-    // but we also set it here for immediate state in the current screen.
-    if (data.session) {
-      setSession(data.session);
-      if (data.session.user) {
-        const profile = await api.getProfile(data.session.user.id);
-        setProfile(profile);
+    try {
+      const validation = signUpSchema.safeParse(params);
+      if (!validation.success) {
+        return { error: validation.error.issues[0].message };
       }
-    }
 
-    return {};
+      const { data, error } = await api.signUp(params);
+      if (error) {
+        console.error('[useAuth.signUp] auth error:', error.message);
+        return { error: friendlyError(error) };
+      }
+
+      // Session is set automatically by the auth listener in _layout.tsx,
+      // but we also set it here for immediate state in the current screen.
+      if (data.session) {
+        setSession(data.session);
+        if (data.session.user) {
+          const profile = await api.getProfile(data.session.user.id);
+          console.log('[useAuth.signUp] profile fetched:', profile?.id ?? 'null');
+          setProfile(profile);
+        }
+      } else {
+        console.warn('[useAuth.signUp] no session returned — email confirmation may be enabled');
+      }
+
+      return {};
+    } catch (e) {
+      console.error('[useAuth.signUp] unexpected error:', e);
+      return { error: friendlyError(e) };
+    }
   }
 
   async function signIn(params: {
     email: string;
     password: string;
   }): Promise<{ error?: string }> {
-    const { data, error } = await api.signIn(params);
-    if (error) return { error: friendlyError(error) };
-
-    if (data.session) {
-      setSession(data.session);
-      if (data.session.user) {
-        const profile = await api.getProfile(data.session.user.id);
-        setProfile(profile);
+    try {
+      const { data, error } = await api.signIn(params);
+      if (error) {
+        console.error('[useAuth.signIn] auth error:', error.message);
+        return { error: friendlyError(error) };
       }
-    }
 
-    return {};
+      if (data.session) {
+        setSession(data.session);
+        if (data.session.user) {
+          const profile = await api.getProfile(data.session.user.id);
+          console.log('[useAuth.signIn] profile fetched:', profile?.id ?? 'null');
+          setProfile(profile);
+        }
+      }
+
+      return {};
+    } catch (e) {
+      console.error('[useAuth.signIn] unexpected error:', e);
+      return { error: friendlyError(e) };
+    }
   }
 
   async function signOut() {
