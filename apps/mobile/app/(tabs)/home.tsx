@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { semantic, textStyles, spacing, radius } from '@/theme';
 import { useAuthStore } from '@/stores/authStore';
 import { useFamilyFeed } from '@/hooks/useCapsules';
+import { useWritingPrompts } from '@/hooks/useWritingPrompts';
 import { CapsuleCard } from '@/components/capsule/CapsuleCard';
 import { EmptyState } from '@/components/capsule/EmptyState';
 import type { CapsuleWithWriter } from '@shared/types';
@@ -19,6 +20,9 @@ export default function Home() {
   const router = useRouter();
   const profile = useAuthStore((s) => s.profile);
   const { data: capsules, isLoading, refetch, isRefetching } = useFamilyFeed();
+  const { data: prompts } = useWritingPrompts();
+
+  const todayPrompt = prompts?.[0];
 
   function renderHeader() {
     return (
@@ -34,8 +38,12 @@ export default function Home() {
         <View style={styles.promptCard}>
           <Text style={styles.promptLabel}>Today's prompt</Text>
           <Text style={styles.promptText}>
-            Tell us about your favorite festival memory growing up...
+            {todayPrompt?.text ??
+              'Tell us about your favorite festival memory growing up...'}
           </Text>
+          {todayPrompt?.why && todayPrompt.why !== 'Fallback prompt' && (
+            <Text style={styles.promptWhy}>{todayPrompt.why}</Text>
+          )}
         </View>
 
         <Text style={styles.sectionTitle}>Recent Stories</Text>
@@ -120,6 +128,12 @@ const styles = StyleSheet.create({
   promptText: {
     ...textStyles.quote,
     color: semantic.textPrimary,
+  },
+  promptWhy: {
+    ...textStyles.caption,
+    color: semantic.textSecondary,
+    marginTop: spacing[2],
+    fontStyle: 'italic',
   },
   sectionTitle: {
     ...textStyles.h3,

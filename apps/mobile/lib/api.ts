@@ -7,6 +7,8 @@ import type {
   CapsuleWithWriter,
   AIPolishResult,
   AIMetadataResult,
+  AIPrompt,
+  UnlockType,
 } from '@shared/types';
 
 // ─── Auth ───────────────────────────────────────────────
@@ -241,6 +243,11 @@ export async function createCapsule(params: {
   familyId: string;
   rawText: string;
   childId?: string | null;
+  unlockType?: UnlockType;
+  unlockDate?: string | null;
+  unlockAge?: number | null;
+  unlockMilestone?: string | null;
+  isSurprise?: boolean;
 }): Promise<Capsule> {
   const { data, error } = await supabase
     .from('capsules')
@@ -250,9 +257,12 @@ export async function createCapsule(params: {
       raw_text: params.rawText,
       child_id: params.childId ?? null,
       is_draft: true,
-      unlock_type: 'immediate',
+      unlock_type: params.unlockType ?? 'immediate',
+      unlock_date: params.unlockDate ?? null,
+      unlock_age: params.unlockAge ?? null,
+      unlock_milestone: params.unlockMilestone ?? null,
+      is_surprise: params.isSurprise ?? false,
       is_unlocked: false,
-      is_surprise: false,
       is_private: false,
     })
     .select()
@@ -269,12 +279,20 @@ export async function updateCapsule(
       Capsule,
       | 'raw_text'
       | 'polished_text'
+      | 'audio_url'
+      | 'audio_duration_seconds'
       | 'title'
       | 'excerpt'
       | 'category'
       | 'mood'
       | 'read_time_minutes'
       | 'child_id'
+      | 'unlock_type'
+      | 'unlock_date'
+      | 'unlock_age'
+      | 'unlock_milestone'
+      | 'is_surprise'
+      | 'is_unlocked'
       | 'is_draft'
       | 'published_at'
     >
@@ -301,6 +319,7 @@ export async function publishCapsule(
     mood: string;
     readTimeMinutes: number;
   },
+  unlockType: UnlockType = 'immediate',
 ): Promise<Capsule> {
   const { data, error } = await supabase
     .from('capsules')
@@ -312,7 +331,7 @@ export async function publishCapsule(
       mood: aiData.mood,
       read_time_minutes: aiData.readTimeMinutes,
       is_draft: false,
-      is_unlocked: true,
+      is_unlocked: unlockType === 'immediate',
       published_at: new Date().toISOString(),
     })
     .eq('id', capsuleId)
@@ -359,4 +378,68 @@ export async function generateMetadata(params: {
 
   if (error) throw error;
   return data as AIMetadataResult;
+}
+
+// ─── Audio ──────────────────────────────────────────────
+
+export async function uploadAudio(
+  userId: string,
+  capsuleId: string,
+  localUri: string,
+): Promise<string> {
+  const path = `${userId}/${capsuleId}.m4a`;
+
+  const response = await fetch(localUri);
+  const blob = await response.blob();
+
+  const { error } = await supabase.storage
+    .from('capsule-audio')
+    .upload(path, blob, {
+      contentType: 'audio/mp4',
+      upsert: true,
+    });
+
+  if (error) throw error;
+
+  const { data: urlData } = supabase.storage
+    .from('capsule-audio')
+    .getPublicUrl(path);
+
+  return urlData.publicUrl;
+}
+
+export async function transcribeAudio(params: {
+  audioUrl: string;
+  languagePreferences?: string[];
+}): Promise<{ transcript: string }> {
+  const { data, error } = await supabase.functions.invoke('speech-to-text', {
+    body: {
+      audio_url: params.audioUrl,
+      language_preferences: params.languagePreferences,
+    },
+  });
+
+  if (error) throw error;
+  return data as { transcript: string };
+}
+
+// ─── Writing Prompts ────────────────────────────────────
+
+export async function getWritingPrompts(params: {
+  writerId: string;
+  languagePreferences?: string[];
+  childrenAges?: number[];
+  previousCategories?: string[];
+}): Promise<{ prompts: AIPrompt[] }> {
+  const { data, error } = await supabase.functions.invoke('smart-prompts', {
+    body: {
+      writer_id: params.writerId,
+      language_preferences: params.languagePreferences,
+      children_ages: params.childrenAges,
+      previous_categories: params.previousCategories,
+    },
+  });
+
+  if (error) throw error;
+  return data as { prompts: AIPrompt[] };
 }

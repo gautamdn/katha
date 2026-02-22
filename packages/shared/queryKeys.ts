@@ -16,4 +16,7 @@ export const queryKeys = {
   families: {
     detail: (familyId: string) => ['families', familyId] as const,
   },
+  prompts: {
+    writer: (writerId: string) => ['prompts', 'writer', writerId] as const,
+  },
 };

@@ -46,8 +46,17 @@ export function usePublishCapsule() {
       rawText: string;
       childId?: string | null;
       capsuleId?: string | null;
+      audioUri?: string | null;
+      audioDurationSeconds?: number | null;
+      unlockType?: import('@shared/types').UnlockType;
+      unlockDate?: string | null;
+      unlockAge?: number | null;
+      unlockMilestone?: import('@shared/types').MilestoneType | string | null;
+      isSurprise?: boolean;
     }) => {
       if (!user || !profile?.family_id) throw new Error('Not authenticated');
+
+      const unlockType = params.unlockType ?? 'immediate';
 
       // Step 1: Create or update capsule row
       let capsuleId = params.capsuleId;
@@ -57,35 +66,106 @@ export function usePublishCapsule() {
           familyId: profile.family_id,
           rawText: params.rawText,
           childId: params.childId,
+          unlockType,
+          unlockDate: params.unlockDate,
+          unlockAge: params.unlockAge,
+          unlockMilestone: params.unlockMilestone,
+          isSurprise: params.isSurprise,
         });
         capsuleId = capsule.id;
       } else {
         await api.updateCapsule(capsuleId, {
           raw_text: params.rawText,
           child_id: params.childId ?? undefined,
+          unlock_type: unlockType,
+          unlock_date: params.unlockDate ?? undefined,
+          unlock_age: params.unlockAge ?? undefined,
+          unlock_milestone: (params.unlockMilestone as import('@shared/types').MilestoneType) ?? undefined,
+          is_surprise: params.isSurprise,
         });
       }
 
-      // Step 2: AI Polish
-      const polishResult = await api.polishText({
-        text: params.rawText,
-        languagePreferences: profile.language_preferences,
-      });
+      // Step 2: If audio, upload to Storage and transcribe
+      let textForPolish = params.rawText;
+      if (params.audioUri) {
+        const audioUrl = await api.uploadAudio(
+          user.id,
+          capsuleId,
+          params.audioUri,
+        );
 
-      // Step 3: AI Metadata
-      const metadataResult = await api.generateMetadata({
-        text: polishResult.polished_text,
-      });
+        await api.updateCapsule(capsuleId, {
+          audio_url: audioUrl,
+          audio_duration_seconds: params.audioDurationSeconds ?? undefined,
+        });
 
-      // Step 4: Publish
-      const published = await api.publishCapsule(capsuleId, {
-        polishedText: polishResult.polished_text,
-        title: metadataResult.title,
-        excerpt: metadataResult.excerpt,
-        category: metadataResult.category,
-        mood: metadataResult.mood,
-        readTimeMinutes: metadataResult.read_time_minutes,
-      });
+        // Transcribe if no text provided
+        if (!textForPolish) {
+          try {
+            const { transcript } = await api.transcribeAudio({
+              audioUrl,
+              languagePreferences: profile.language_preferences,
+            });
+            textForPolish = transcript;
+            await api.updateCapsule(capsuleId, { raw_text: transcript });
+          } catch (err) {
+            console.warn('[usePublishCapsule] Transcription failed:', err);
+          }
+        }
+      }
+
+      // Step 3: AI Polish (skip if no text)
+      let polishedText = textForPolish;
+      if (textForPolish) {
+        try {
+          const polishResult = await api.polishText({
+            text: textForPolish,
+            languagePreferences: profile.language_preferences,
+          });
+          polishedText = polishResult.polished_text;
+        } catch (err) {
+          console.warn('[usePublishCapsule] Polish failed:', err);
+        }
+      }
+
+      // Step 4: AI Metadata (skip if no text)
+      let metadata = {
+        title: 'Untitled',
+        excerpt: '',
+        category: 'other',
+        mood: 'reflective',
+        readTimeMinutes: 1,
+      };
+      if (polishedText) {
+        try {
+          const metadataResult = await api.generateMetadata({
+            text: polishedText,
+          });
+          metadata = {
+            title: metadataResult.title,
+            excerpt: metadataResult.excerpt,
+            category: metadataResult.category,
+            mood: metadataResult.mood,
+            readTimeMinutes: metadataResult.read_time_minutes,
+          };
+        } catch (err) {
+          console.warn('[usePublishCapsule] Metadata failed:', err);
+        }
+      }
+
+      // Step 5: Publish
+      const published = await api.publishCapsule(
+        capsuleId,
+        {
+          polishedText: polishedText || '',
+          title: metadata.title,
+          excerpt: metadata.excerpt,
+          category: metadata.category,
+          mood: metadata.mood,
+          readTimeMinutes: metadata.readTimeMinutes,
+        },
+        unlockType,
+      );
 
       return published;
     },
