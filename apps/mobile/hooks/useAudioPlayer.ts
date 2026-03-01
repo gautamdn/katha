@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Audio } from 'expo-av';
+import { debug } from '@/lib/debug';
 
 interface UseAudioPlayerReturn {
   isPlaying: boolean;
@@ -54,7 +55,7 @@ export function useAudioPlayer(audioUrl: string | null): UseAudioPlayerReturn {
       }
     }
 
-    loadSound().catch(console.warn);
+    loadSound().catch((err) => debug.warn('useAudioPlayer', 'load failed:', err));
 
     return () => {
       mounted = false;

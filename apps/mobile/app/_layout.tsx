@@ -9,6 +9,7 @@ import { StyleSheet } from 'react-native';
 import { semantic } from '@/theme';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { debug } from '@/lib/debug';
 import * as api from '@/lib/api';
 
 // Prevent splash screen from hiding until fonts are loaded
@@ -30,22 +31,39 @@ export default function RootLayout() {
 
   // Bootstrap auth state from persisted session + listen for changes
   useEffect(() => {
+    debug.log('RootLayout', 'bootstrapping auth...');
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      debug.log('RootLayout', 'getSession result — hasSession:', !!session, 'userId:', session?.user?.id);
       setSession(session);
       if (session?.user) {
-        const profile = await api.getProfile(session.user.id);
-        setProfile(profile);
+        try {
+          const profile = await api.getProfile(session.user.id);
+          debug.log('RootLayout', 'profile loaded — familyId:', profile?.family_id, 'role:', profile?.role, 'name:', profile?.display_name);
+          setProfile(profile);
+        } catch (err) {
+          debug.error('RootLayout', 'failed to load profile:', err);
+        }
       }
+      setLoading(false);
+      debug.log('RootLayout', 'auth bootstrap complete');
+    }).catch((err) => {
+      debug.error('RootLayout', 'getSession FAILED:', err);
       setLoading(false);
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      debug.log('RootLayout', 'onAuthStateChange — event:', event, 'hasSession:', !!session, 'userId:', session?.user?.id);
       setSession(session);
       if (session?.user) {
-        const profile = await api.getProfile(session.user.id);
-        setProfile(profile);
+        try {
+          const profile = await api.getProfile(session.user.id);
+          debug.log('RootLayout', 'auth change profile — familyId:', profile?.family_id);
+          setProfile(profile);
+        } catch (err) {
+          debug.error('RootLayout', 'auth change profile load FAILED:', err);
+        }
       } else {
         setProfile(null);
       }

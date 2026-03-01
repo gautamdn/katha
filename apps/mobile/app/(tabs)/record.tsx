@@ -19,6 +19,7 @@ import { TimeCapsulePicker } from '@/components/capsule/TimeCapsulePicker';
 import { useDraftStore } from '@/stores/draftStore';
 import { usePublishCapsule } from '@/hooks/useCapsules';
 import { useChildren } from '@/hooks/useChildren';
+import { debug } from '@/lib/debug';
 import { DRAFT_AUTOSAVE_INTERVAL } from '@/lib/constants';
 import type { Capsule, Child } from '@shared/types';
 
@@ -122,6 +123,7 @@ export default function RecordScreen() {
     if (mode === 'write' && !rawText) return;
     if (mode === 'record' && !audioUri) return;
 
+    debug.log('RecordScreen', 'handlePublish — mode:', mode, 'textLen:', rawText.length, 'hasAudio:', !!audioUri, 'unlockType:', unlockType);
     setStep('publishing');
     publishMutation.mutate(
       {
@@ -137,11 +139,13 @@ export default function RecordScreen() {
       },
       {
         onSuccess: (capsule) => {
+          debug.log('RecordScreen', 'publish SUCCESS, capsuleId:', capsule.id, 'title:', capsule.title);
           clearDraft();
           setPublished(capsule);
           setStep('published');
         },
-        onError: () => {
+        onError: (error) => {
+          debug.error('RecordScreen', 'publish FAILED:', error instanceof Error ? error.message : error, error);
           setStep(mode === 'record' ? 'preview' : 'input');
         },
       },
@@ -254,7 +258,7 @@ export default function RecordScreen() {
             <Text style={styles.error}>
               {publishMutation.error instanceof Error
                 ? publishMutation.error.message
-                : 'Something went wrong. Try again.'}
+                : 'Something went wrong. Your draft is saved — please try again.'}
             </Text>
           )}
 
@@ -352,7 +356,7 @@ export default function RecordScreen() {
                 <Text style={styles.error}>
                   {publishMutation.error instanceof Error
                     ? publishMutation.error.message
-                    : 'Something went wrong. Your draft is saved — try again.'}
+                    : 'Something went wrong. Your draft is saved — please try again.'}
                 </Text>
               )}
 

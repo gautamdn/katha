@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/stores/authStore';
+import { debug } from '@/lib/debug';
 import * as api from '@/lib/api';
 import { signUpSchema } from '@shared/schema';
 
@@ -35,7 +36,7 @@ export function useAuth() {
 
       const { data, error } = await api.signUp(params);
       if (error) {
-        console.error('[useAuth.signUp] auth error:', error.message);
+        debug.error('useAuth.signUp', 'auth error:', error.message);
         return { error: friendlyError(error) };
       }
 
@@ -45,16 +46,16 @@ export function useAuth() {
         setSession(data.session);
         if (data.session.user) {
           const profile = await api.getProfile(data.session.user.id);
-          console.log('[useAuth.signUp] profile fetched:', profile?.id ?? 'null');
+          debug.log('useAuth.signUp', 'profile fetched:', profile?.id ?? 'null');
           setProfile(profile);
         }
       } else {
-        console.warn('[useAuth.signUp] no session returned — email confirmation may be enabled');
+        debug.warn('useAuth.signUp', 'no session returned — email confirmation may be enabled');
       }
 
       return {};
     } catch (e) {
-      console.error('[useAuth.signUp] unexpected error:', e);
+      debug.error('useAuth.signUp', 'unexpected error:', e);
       return { error: friendlyError(e) };
     }
   }
@@ -66,7 +67,7 @@ export function useAuth() {
     try {
       const { data, error } = await api.signIn(params);
       if (error) {
-        console.error('[useAuth.signIn] auth error:', error.message);
+        debug.error('useAuth.signIn', 'auth error:', error.message);
         return { error: friendlyError(error) };
       }
 
@@ -74,14 +75,14 @@ export function useAuth() {
         setSession(data.session);
         if (data.session.user) {
           const profile = await api.getProfile(data.session.user.id);
-          console.log('[useAuth.signIn] profile fetched:', profile?.id ?? 'null');
+          debug.log('useAuth.signIn', 'profile fetched:', profile?.id ?? 'null');
           setProfile(profile);
         }
       }
 
       return {};
     } catch (e) {
-      console.error('[useAuth.signIn] unexpected error:', e);
+      debug.error('useAuth.signIn', 'unexpected error:', e);
       return { error: friendlyError(e) };
     }
   }
