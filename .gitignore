@@ -25,3 +25,6 @@ Thumbs.db
 
 # EAS
 *.tgz
+
+# Git worktrees
+.worktrees/
