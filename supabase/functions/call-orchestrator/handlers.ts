@@ -15,6 +15,12 @@ interface StartRequest {
 }
 
 export async function handleStart(req: Request): Promise<Response> {
+  const auth = req.headers.get('authorization');
+  const expected = `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`;
+  if (auth !== expected) {
+    return new Response('Unauthorized — service role only', { status: 403, headers: CORS_HEADERS });
+  }
+
   const body = (await req.json()) as StartRequest;
   const supabase = getAdminClient();
 
