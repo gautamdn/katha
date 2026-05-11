@@ -1,0 +1,22 @@
+{
+  "name": "@katha/ai",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@katha/shared": "*",
+    "@anthropic-ai/sdk": "^0.30.0",
+    "openai": "^4.60.0",
+    "@huggingface/inference": "^2.8.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.0",
+    "typescript": "^5.5.0"
+  }
+}
