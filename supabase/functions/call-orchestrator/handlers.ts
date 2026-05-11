@@ -284,6 +284,53 @@ export async function handleWebhookTurn(body: ProviderTurnEvent & { event: 'turn
 }
 
 export async function handleWebhookCallEnd(body: ProviderCallEndEvent & { event: 'call_ended' }): Promise<Response> {
-  // Implemented in Task 6.5
-  throw new Error('handleWebhookCallEnd: not yet implemented (Task 6.5)');
+  const supabase = getAdminClient();
+
+  const { data: call, error: callErr } = await supabase
+    .from('calls')
+    .select('id, voice_verification_score')
+    .eq('provider_call_id', body.provider_call_id)
+    .single();
+  if (callErr || !call) return new Response('Unknown call', { status: 404 });
+
+  // Aggregate voice verification score across all elder turns in the call.
+  const { data: turns } = await supabase
+    .from('call_turns')
+    .select('voice_verification_score, speaker')
+    .eq('call_id', call.id)
+    .eq('speaker', 'elder');
+  const elderScores = (turns ?? [])
+    .map((t: { voice_verification_score: number | null }) => t.voice_verification_score)
+    .filter((s): s is number => typeof s === 'number');
+  const aggregate =
+    elderScores.length > 0
+      ? elderScores.reduce((a, b) => a + b, 0) / elderScores.length
+      : null;
+
+  await supabase
+    .from('calls')
+    .update({
+      status: body.status,
+      ended_at: new Date().toISOString(),
+      duration_seconds: body.duration_seconds,
+      recording_url: body.recording_url,
+      cost_cents: body.cost_cents,
+      voice_verification_score: aggregate,
+    })
+    .eq('id', call.id);
+
+  if (body.status === 'completed') {
+    const url = `${Deno.env.get('SUPABASE_URL')}/functions/v1/post-call-process`;
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ call_id: call.id }),
+    }).catch((e: Error) => console.error('post-call-process trigger failed', e));
+    // fire-and-forget; ack webhook immediately
+  }
+
+  return new Response('ok', { status: 200 });
 }
