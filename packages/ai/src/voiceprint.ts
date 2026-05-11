@@ -21,7 +21,7 @@ export async function extractVoiceprint(opts: ExtractOptions): Promise<number[]>
   const audioBlob =
     opts.audio instanceof Blob
       ? opts.audio
-      : new Blob([opts.audio], { type: 'audio/flac' });
+      : new Blob([new Uint8Array(opts.audio)], { type: 'audio/flac' });
 
   const res = await fetch(`${HF_INFERENCE_URL}/${model}`, {
     method: 'POST',
