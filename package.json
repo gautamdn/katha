@@ -24,7 +24,11 @@
     "test:ai": "npm run test --workspace=@katha/ai"
   },
   "devDependencies": {
-    "vitest": "^2.0.0",
-    "typescript": "^5.5.0"
+    "@supabase/supabase-js": "^2.105.4",
+    "@types/node": "^20.0.0",
+    "dotenv": "^16.4.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
   }
 }
