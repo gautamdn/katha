@@ -96,8 +96,25 @@ export async function handleStart(req: Request): Promise<Response> {
 }
 
 export async function handleWebhookCallStart(body: { provider_call_id: string; metadata?: { call_id?: string } }): Promise<Response> {
-  // Implemented in Task 6.3
-  throw new Error('handleWebhookCallStart: not yet implemented (Task 6.3)');
+  const supabase = getAdminClient();
+
+  // Prefer call_id from metadata (set on dial); fall back to provider_call_id lookup.
+  const callId = body.metadata?.call_id;
+  if (!callId) {
+    const { data: c } = await supabase
+      .from('calls')
+      .select('id')
+      .eq('provider_call_id', body.provider_call_id)
+      .single();
+    if (!c) return new Response('Unknown call', { status: 404 });
+  }
+
+  await supabase
+    .from('calls')
+    .update({ status: 'in_progress', started_at: new Date().toISOString() })
+    .eq('provider_call_id', body.provider_call_id);
+
+  return new Response('ok', { status: 200 });
 }
 
 export async function handleWebhookTurn(body: ProviderTurnEvent & { event: 'turn' }): Promise<Response> {
