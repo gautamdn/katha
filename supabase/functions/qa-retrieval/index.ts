@@ -1,4 +1,5 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
+import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { CORS_HEADERS, handleCorsPreflight } from '../_shared/cors.ts';
 import { getAdminClient } from '../_shared/supabase-admin.ts';
 import Anthropic from 'npm:@anthropic-ai/sdk@0.95.1';
@@ -28,11 +29,31 @@ Deno.serve(async (req) => {
   if (cors) return cors;
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
 
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader) {
+    return new Response('Missing authorization', { status: 401, headers: CORS_HEADERS });
+  }
+
   const body = (await req.json()) as QARequest;
   if (!body.elder_id || !body.question) {
     return new Response('elder_id and question required', { status: 400 });
   }
   const topK = body.top_k ?? 6;
+
+  // Verify caller has access to this elder via RLS before using admin client.
+  const userScopedClient = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_ANON_KEY')!,
+    { global: { headers: { Authorization: authHeader } } },
+  );
+  const { data: elderCheck, error: elderErr } = await userScopedClient
+    .from('elders')
+    .select('id')
+    .eq('id', body.elder_id)
+    .single();
+  if (elderErr || !elderCheck) {
+    return new Response('Elder not found or not accessible', { status: 404, headers: CORS_HEADERS });
+  }
 
   const supabase = getAdminClient();
   const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
