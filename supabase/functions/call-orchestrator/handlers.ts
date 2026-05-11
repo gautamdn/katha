@@ -126,6 +126,27 @@ export async function handleWebhookCallStart(body: { provider_call_id: string; m
 const HF_TOKEN = Deno.env.get('HUGGINGFACE_TOKEN')!;
 const SAME_SPEAKER_THRESHOLD = 0.75;
 
+// Mirrors normalizePyannoteEmbedding in packages/ai/src/voiceprint.ts.
+// Deno cannot import from @katha/ai — keep both in sync when changing shape logic.
+function normalizePyannoteEmbedding(parsed: unknown): number[] {
+  let candidate: unknown = parsed;
+  if (parsed && typeof parsed === 'object' && 'embedding' in parsed) {
+    candidate = (parsed as { embedding: unknown }).embedding;
+  }
+  if (Array.isArray(candidate) && Array.isArray(candidate[0])) {
+    candidate = (candidate as number[][])[0];
+  }
+  if (!Array.isArray(candidate) || candidate.length === 0 || typeof candidate[0] !== 'number') {
+    throw new Error(
+      `Unexpected pyannote response shape: ${JSON.stringify(parsed).slice(0, 200)}`,
+    );
+  }
+  if (candidate.length !== 512) {
+    throw new Error(`Unexpected voiceprint length ${candidate.length}; expected 512`);
+  }
+  return candidate as number[];
+}
+
 async function extractVoiceprintHF(audioUrl: string): Promise<number[]> {
   const audioRes = await fetch(audioUrl);
   if (!audioRes.ok) throw new Error(`Could not fetch audio: ${audioRes.status}`);
@@ -145,11 +166,8 @@ async function extractVoiceprintHF(audioUrl: string): Promise<number[]> {
     const text = await hfRes.text();
     throw new Error(`HF inference failed ${hfRes.status}: ${text}`);
   }
-  const json = (await hfRes.json()) as { embedding: number[] | number[][] };
-  if (!json.embedding) throw new Error('HF response missing embedding');
-  // Flatten in case the model returns a 2D array.
-  const raw = json.embedding;
-  return Array.isArray(raw[0]) ? (raw as number[][]).flat() : (raw as number[]);
+  const parsed = await hfRes.json();
+  return normalizePyannoteEmbedding(parsed);
 }
 
 function cosine(a: number[], b: number[]): number {

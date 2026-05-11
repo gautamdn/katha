@@ -1,8 +1,6 @@
-// TODO(voiceprint): verify HF v4 method name when running live.
-// In @huggingface/inference v4, audioToAudio changed its parameter name from `data` to `inputs`
-// and returns AudioToAudioOutput[] (audio blobs, not embeddings). pyannote/embedding requires
-// a raw HTTP call to the HF Inference API since the SDK's typed tasks don't cover speaker
-// embedding extraction. The live tests are skipIf-gated on HUGGINGFACE_TOKEN.
+// NOTE: normalizePyannoteEmbedding is mirrored inline in
+// supabase/functions/call-orchestrator/handlers.ts (Deno runtime cannot import
+// from @katha/ai). Keep both in sync when changing shape-handling logic.
 
 export const SAME_SPEAKER_THRESHOLD = 0.75;
 export const VOICEPRINT_DIM = 512;
@@ -15,6 +13,27 @@ export interface ExtractOptions {
 
 const DEFAULT_MODEL = 'pyannote/embedding';
 const HF_INFERENCE_URL = 'https://api-inference.huggingface.co/models';
+
+// Accepts any of the shapes pyannote/embedding has been observed to return:
+//   { embedding: number[] }  |  { embedding: number[][] }  |  number[]  |  number[][]
+export function normalizePyannoteEmbedding(parsed: unknown): number[] {
+  let candidate: unknown = parsed;
+  if (parsed && typeof parsed === 'object' && 'embedding' in parsed) {
+    candidate = (parsed as { embedding: unknown }).embedding;
+  }
+  if (Array.isArray(candidate) && Array.isArray(candidate[0])) {
+    candidate = (candidate as number[][])[0];
+  }
+  if (!Array.isArray(candidate) || candidate.length === 0 || typeof candidate[0] !== 'number') {
+    throw new Error(
+      `Unexpected pyannote response shape: ${JSON.stringify(parsed).slice(0, 200)}`,
+    );
+  }
+  if (candidate.length !== VOICEPRINT_DIM) {
+    throw new Error(`Unexpected voiceprint length ${candidate.length}; expected ${VOICEPRINT_DIM}`);
+  }
+  return candidate as number[];
+}
 
 export async function extractVoiceprint(opts: ExtractOptions): Promise<number[]> {
   const model = opts.model ?? DEFAULT_MODEL;
@@ -38,24 +57,7 @@ export async function extractVoiceprint(opts: ExtractOptions): Promise<number[]>
   }
 
   const json = (await res.json()) as unknown;
-
-  // pyannote/embedding returns a nested array: [[dim0, dim1, ...]]
-  // Flatten one level if wrapped in an outer array.
-  let embedding: number[];
-  if (Array.isArray(json) && Array.isArray((json as number[][])[0])) {
-    embedding = (json as number[][])[0];
-  } else if (Array.isArray(json)) {
-    embedding = json as number[];
-  } else {
-    throw new Error(`Unexpected voiceprint response shape: ${JSON.stringify(json)}`);
-  }
-
-  if (embedding.length !== VOICEPRINT_DIM) {
-    throw new Error(
-      `Unexpected voiceprint dimension: got ${embedding.length}, expected ${VOICEPRINT_DIM}`,
-    );
-  }
-  return embedding;
+  return normalizePyannoteEmbedding(json);
 }
 
 export function compareVoiceprints(a: number[], b: number[]): number {
