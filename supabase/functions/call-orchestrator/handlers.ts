@@ -117,9 +117,170 @@ export async function handleWebhookCallStart(body: { provider_call_id: string; m
   return new Response('ok', { status: 200 });
 }
 
+const HF_TOKEN = Deno.env.get('HUGGINGFACE_TOKEN')!;
+const SAME_SPEAKER_THRESHOLD = 0.75;
+
+async function extractVoiceprintHF(audioUrl: string): Promise<number[]> {
+  const audioRes = await fetch(audioUrl);
+  if (!audioRes.ok) throw new Error(`Could not fetch audio: ${audioRes.status}`);
+  const audio = await audioRes.arrayBuffer();
+
+  // Direct HTTP to HF Inference — pyannote/embedding is not exposed as a typed method
+  // in @huggingface/inference SDK v4 (see Phase 3 findings).
+  const hfRes = await fetch('https://api-inference.huggingface.co/models/pyannote/embedding', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${HF_TOKEN}`,
+      'Content-Type': 'audio/flac',
+    },
+    body: audio,
+  });
+  if (!hfRes.ok) {
+    const text = await hfRes.text();
+    throw new Error(`HF inference failed ${hfRes.status}: ${text}`);
+  }
+  const json = (await hfRes.json()) as { embedding: number[] | number[][] };
+  if (!json.embedding) throw new Error('HF response missing embedding');
+  // Flatten in case the model returns a 2D array.
+  const raw = json.embedding;
+  return Array.isArray(raw[0]) ? (raw as number[][]).flat() : (raw as number[]);
+}
+
+function cosine(a: number[], b: number[]): number {
+  if (a.length !== b.length) return 0;
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  if (na === 0 || nb === 0) return 0;
+  return dot / (Math.sqrt(na) * Math.sqrt(nb));
+}
+
+// 6.4-bis: extract structured cues from an elder turn via Haiku
+async function extractCuesQuick(transcript: string, language: string): Promise<Record<string, unknown>> {
+  if (!transcript.trim()) return {};
+  try {
+    const { default: Anthropic } = await import('npm:@anthropic-ai/sdk@0.95.1');
+    const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! });
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 256,
+      temperature: 0.1,
+      system: `Extract structured cues from an elder's spoken turn. Return JSON: {"time_capsule": {"recipient": "...", "condition": "..."} | null, "advice": {"topic": "..."} | null, "distress": {"severity": "mild|moderate|severe"} | null, "cadence": {"request": "..."} | null, "sharing_request": {"recipient_label": "..."} | null}. Set keys to null if not present.`,
+      messages: [{ role: 'user', content: `Language: ${language}\nTurn: ${transcript}` }],
+    });
+    const block = res.content.find((b: { type: string }) => b.type === 'text') as { type: 'text'; text: string } | undefined;
+    if (!block) return {};
+    const fenced = /```(?:json)?\n([\s\S]*?)\n```/.exec(block.text);
+    return JSON.parse(fenced ? fenced[1] : block.text);
+  } catch (_) {
+    return {};
+  }
+}
+
+// 6.4-ter: detect explicit consent statements in an elder turn via Haiku
+async function detectConsents(transcript: string, language: string): Promise<Array<{ type: string; granted: boolean }>> {
+  if (!transcript.trim()) return [];
+  try {
+    const { default: Anthropic } = await import('npm:@anthropic-ai/sdk@0.95.1');
+    const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! });
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 256,
+      temperature: 0.1,
+      system: `Detect explicit yes/no consent statements in an elder's spoken turn. Categories: "recording", "family_sharing", "persona_use", "voice_cloning", "external_share". Return JSON: {"consents": [{"type": "recording", "granted": true}, ...]}. Empty array if none.`,
+      messages: [{ role: 'user', content: `Language: ${language}\nTurn: ${transcript}` }],
+    });
+    const block = res.content.find((b: { type: string }) => b.type === 'text') as { type: 'text'; text: string } | undefined;
+    if (!block) return [];
+    const fenced = /```(?:json)?\n([\s\S]*?)\n```/.exec(block.text);
+    const parsed = JSON.parse(fenced ? fenced[1] : block.text);
+    return parsed.consents ?? [];
+  } catch (_) {
+    return [];
+  }
+}
+
 export async function handleWebhookTurn(body: ProviderTurnEvent & { event: 'turn' }): Promise<Response> {
-  // Implemented in Task 6.4
-  throw new Error('handleWebhookTurn: not yet implemented (Task 6.4)');
+  const supabase = getAdminClient();
+
+  const { data: call, error: callErr } = await supabase
+    .from('calls')
+    .select('id, elder_id, is_first_call')
+    .eq('provider_call_id', body.provider_call_id)
+    .single();
+  if (callErr || !call) return new Response('Unknown call', { status: 404 });
+
+  let voiceScore: number | null = null;
+
+  if (body.speaker === 'elder') {
+    try {
+      const turnEmbedding = await extractVoiceprintHF(body.audio_clip_url);
+
+      const { data: elder } = await supabase
+        .from('elders')
+        .select('voiceprint')
+        .eq('id', call.elder_id)
+        .single();
+
+      if (elder?.voiceprint && Array.isArray(elder.voiceprint)) {
+        voiceScore = cosine(turnEmbedding, elder.voiceprint as number[]);
+      } else if (call.is_first_call) {
+        // Enroll voiceprint on first elder turn that is long enough to be reliable.
+        const turnDurationMs = body.ended_at_ms - body.started_at_ms;
+        if (turnDurationMs >= 3000) {
+          await supabase
+            .from('elders')
+            .update({
+              voiceprint: turnEmbedding,
+              voiceprint_enrolled_at: new Date().toISOString(),
+            })
+            .eq('id', call.elder_id);
+          voiceScore = 1.0;
+        }
+      }
+    } catch (e) {
+      console.error('Voiceprint failed:', e);
+    }
+  }
+
+  // 6.4-bis: cue extraction for elder turns with transcript
+  let cues: Record<string, unknown> = {};
+  if (body.speaker === 'elder' && body.transcript) {
+    cues = await extractCuesQuick(body.transcript, body.language);
+  }
+
+  // 6.4-ter: consent capture during first call elder turns
+  if (call.is_first_call && body.speaker === 'elder' && body.transcript) {
+    const consents = await detectConsents(body.transcript, body.language);
+    for (const c of consents) {
+      await supabase.from('elder_consents').insert({
+        elder_id: call.elder_id,
+        consent_type: c.type,
+        granted: c.granted,
+        audio_url: body.audio_clip_url,
+        transcript: body.transcript,
+        language: body.language,
+        call_id: call.id,
+      });
+    }
+  }
+
+  await supabase.from('call_turns').insert({
+    call_id: call.id,
+    speaker: body.speaker,
+    audio_clip_url: body.audio_clip_url,
+    transcript: body.transcript,
+    language: body.language,
+    started_at_ms: body.started_at_ms,
+    ended_at_ms: body.ended_at_ms,
+    voice_verification_score: voiceScore,
+    cues,
+  });
+
+  return new Response('ok', { status: 200 });
 }
 
 export async function handleWebhookCallEnd(body: ProviderCallEndEvent & { event: 'call_ended' }): Promise<Response> {
