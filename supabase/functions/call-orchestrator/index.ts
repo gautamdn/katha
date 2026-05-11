@@ -1,3 +1,17 @@
+/**
+ * call-orchestrator
+ *
+ * Current scope (Plan 1, mock mode): operator manually attaches
+ * SUPABASE_SERVICE_ROLE_KEY as bearer for /webhook calls. Default
+ * verify_jwt=true blocks unauthenticated traffic.
+ *
+ * For production (Plan 1.5 follow-up — Plivo+Pipecat integration):
+ *   - /webhook will need to accept unauthenticated traffic from the
+ *     telephony provider. DO NOT just disable verify_jwt without
+ *     adding signed-webhook validation (HMAC of provider secret).
+ *   - Consider splitting into /webhook-mock (verify_jwt=true, service
+ *     role only) and /webhook (verify_jwt=false, HMAC-validated).
+ */
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { CORS_HEADERS, handleCorsPreflight } from '../_shared/cors.ts';
 import {
