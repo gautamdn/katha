@@ -26,7 +26,11 @@ export async function generateJSON<T = unknown>(opts: GenerateJSONOptions): Prom
   const text = block.text.trim();
   const fenced = FENCED.exec(text);
   const candidate = fenced ? fenced[1] : text;
-  return JSON.parse(candidate) as T;
+  try {
+    return JSON.parse(candidate) as T;
+  } catch (e) {
+    throw new Error(`Failed to parse JSON from Claude: ${(e as Error).message}\n---\n${text}`);
+  }
 }
 
 export const MODELS = {

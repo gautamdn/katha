@@ -4,7 +4,6 @@ config();
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const PHONE_KEY = process.env.PHONE_ENCRYPTION_KEY!;
 const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL ?? 'gautam@example.com';
 const TEST_USER_PASSWORD = process.env.TEST_USER_PASSWORD ?? 'changeme';
 const TEST_ELDER_PHONE = process.env.TEST_ELDER_PHONE!;     // your real test phone, E.164

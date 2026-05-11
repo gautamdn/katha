@@ -6,7 +6,7 @@ Run after deploying all Plan 1 Edge Functions.
 ## Prerequisites
 
 - Supabase project deployed with all Plan 1 migrations (012-019) applied.
-- Edge Function env vars set: `PROVIDER_MODE=mock`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `HUGGINGFACE_API_KEY`, `PHONE_ENCRYPTION_KEY`.
+- Edge Function env vars set: `PROVIDER_MODE=mock`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `HUGGINGFACE_TOKEN`, `PHONE_ENCRYPTION_KEY`.
 - Elder seeded via `scripts/seed-test-family.ts`. Export `ELDER_ID` from that run.
 - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` exported in your shell.
 
