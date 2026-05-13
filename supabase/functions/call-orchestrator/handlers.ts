@@ -33,8 +33,13 @@ export async function handleStart(req: Request): Promise<Response> {
     return new Response(`Elder not found: ${elderErr?.message}`, { status: 404 });
   }
 
+  const PHONE_ENCRYPTION_KEY = Deno.env.get('PHONE_ENCRYPTION_KEY');
+  if (!PHONE_ENCRYPTION_KEY) {
+    return new Response('PHONE_ENCRYPTION_KEY not configured', { status: 500 });
+  }
   const { data: phone, error: phoneErr } = await supabase.rpc('get_elder_phone_e164', {
     elder_id_arg: body.brief.elder_id,
+    encryption_key: PHONE_ENCRYPTION_KEY,
   });
   if (phoneErr || !phone) {
     return new Response(`Phone decrypt failed: ${phoneErr?.message}`, { status: 500 });
