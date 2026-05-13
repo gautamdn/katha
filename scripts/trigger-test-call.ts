@@ -23,7 +23,8 @@ async function main() {
     process.exit(1);
   }
   const result = await res.json();
-  console.log('Call queued:', result);
+  console.log('Call queued:', JSON.stringify(result));
+  console.log('call_id=' + result.call_id);
 }
 
 main().catch((e) => {

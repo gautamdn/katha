@@ -8,15 +8,14 @@
 #
 # This script:
 #   1. Links to the project (if not linked)
-#   2. Pushes migrations 012-020
-#   3. Sets the phone_encryption_key GUC
-#   4. Deploys all five Edge Functions (_shared sits beside them; no separate deploy)
-#   5. Sets function secrets (Anthropic + OpenAI + optional HF + Sarvam)
-#   6. Runs seed-test-family.ts
-#   7. Triggers a mock call
-#   8. Simulates webhook events (start, two turns, end)
-#   9. Verifies capsules + persona_index populated
-#  10. Runs qa-retrieval
+#   2. Pushes migrations 012-021
+#   3. Deploys all four Edge Functions (_shared sits beside them; no separate deploy)
+#   4. Sets function secrets (Anthropic + OpenAI + PHONE_ENCRYPTION_KEY + optional HF)
+#   5. Runs seed-test-family.ts
+#   6. Triggers a mock call
+#   7. Simulates webhook events (start, two turns, end)
+#   8. Verifies capsules + persona_index populated
+#   9. Runs qa-retrieval
 #
 # Exit codes: 0 = full pass, non-zero = first failure.
 
@@ -36,7 +35,9 @@ if [[ -z "${SUPABASE_DB_PASSWORD:-}" ]]; then
 fi
 
 PROJECT_URL="https://${SUPABASE_PROJECT_REF}.supabase.co"
-PHONE_ENCRYPTION_KEY="${PHONE_ENCRYPTION_KEY:-$(openssl rand -hex 32)}"
+# Phone encryption key is passed as an RPC parameter (migration 021), not a DB GUC.
+# Reuse via env so a re-run touches the same encrypted phone column; otherwise mint.
+export PHONE_ENCRYPTION_KEY="${PHONE_ENCRYPTION_KEY:-$(openssl rand -hex 32)}"
 
 echo "==> Linking project ${SUPABASE_PROJECT_REF}"
 npx supabase link --project-ref "${SUPABASE_PROJECT_REF}" --password "${SUPABASE_DB_PASSWORD}"
@@ -44,19 +45,11 @@ npx supabase link --project-ref "${SUPABASE_PROJECT_REF}" --password "${SUPABASE
 echo "==> Pushing migrations"
 npx supabase db push --password "${SUPABASE_DB_PASSWORD}"
 
-echo "==> Setting phone_encryption_key GUC"
-PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql \
-  -h "aws-0-${SUPABASE_REGION:-us-east-1}.pooler.supabase.com" \
-  -U "postgres.${SUPABASE_PROJECT_REF}" \
-  -d postgres \
-  -p 6543 \
-  -c "ALTER DATABASE postgres SET app.phone_encryption_key = '${PHONE_ENCRYPTION_KEY}';" \
-  || echo "(psql not installed or pooler endpoint differs; set via dashboard SQL editor instead)"
-
 echo "==> Setting Edge Function secrets"
 npx supabase secrets set --project-ref "${SUPABASE_PROJECT_REF}" \
   ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" \
   OPENAI_API_KEY="${OPENAI_API_KEY}" \
+  PHONE_ENCRYPTION_KEY="${PHONE_ENCRYPTION_KEY}" \
   PROVIDER_MODE="mock" \
   ${HUGGINGFACE_TOKEN:+HUGGINGFACE_TOKEN="${HUGGINGFACE_TOKEN}"}
 
@@ -74,7 +67,11 @@ export TEST_ELDER_PHONE="${TEST_ELDER_PHONE:-+919999999999}"
 export TEST_ELDER_NAME="${TEST_ELDER_NAME:-Susheela}"
 export TEST_ELDER_LANG="${TEST_ELDER_LANG:-kn}"
 
-SEED_OUTPUT=$(npx ts-node scripts/seed-test-family.ts)
+# --transpile-only + explicit CJS module: avoids ts-node's auto-ESM detection
+# (which fails on .ts when the script has zero package.json "type" hint and
+# ts-node 10.9.x routes through the ESM loader by default in some environments).
+TS_NODE_OPTS=(--transpile-only --compiler-options '{"module":"commonjs","esModuleInterop":true,"target":"ES2020"}')
+SEED_OUTPUT=$(npx ts-node "${TS_NODE_OPTS[@]}" scripts/seed-test-family.ts)
 echo "${SEED_OUTPUT}"
 ELDER_ID=$(echo "${SEED_OUTPUT}" | grep "^Elder:" | awk '{print $2}')
 if [[ -z "${ELDER_ID}" ]]; then
@@ -85,9 +82,9 @@ echo "==> ELDER_ID=${ELDER_ID}"
 
 echo "==> Triggering mock call"
 export ELDER_ID
-CALL_RESPONSE=$(npx ts-node scripts/trigger-test-call.ts)
+CALL_RESPONSE=$(npx ts-node "${TS_NODE_OPTS[@]}" scripts/trigger-test-call.ts)
 echo "${CALL_RESPONSE}"
-CALL_ID=$(echo "${CALL_RESPONSE}" | grep -oE '"call_id":"[^"]+"' | head -1 | sed -E 's/"call_id":"([^"]+)"/\1/')
+CALL_ID=$(echo "${CALL_RESPONSE}" | sed -nE 's/^call_id=(.+)$/\1/p' | head -1)
 if [[ -z "${CALL_ID}" ]]; then
   echo "Could not parse call ID from trigger output" >&2
   exit 1
