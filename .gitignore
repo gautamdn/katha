@@ -28,3 +28,8 @@ Thumbs.db
 
 # Git worktrees
 .worktrees/
+
+# Deno (Edge Function local type-check artifacts)
+deno.lock
+supabase/functions/deno.lock
+supabase/functions/node_modules/
