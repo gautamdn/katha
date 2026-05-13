@@ -11,7 +11,7 @@ RETURNS TABLE (
   call_started_at TIMESTAMPTZ
 )
 LANGUAGE sql STABLE
-SET search_path = public
+SET search_path = public, extensions
 AS $$
   SELECT
     pi.text AS fact_text,
