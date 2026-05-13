@@ -4,7 +4,7 @@
 
 This repo is mid-pivot. Read this section before touching anything.
 
-The original Katha (record-in-app for grandparents) is being replaced by **Susheela** — an AI that calls elders on their phone, captures their stories, and surfaces them to the family. The elder's mobile app goes away; the family-side mobile app stays and gets repurposed.
+The original Katha (record-in-app for grandparents) is being replaced by **Susheela** — an AI that calls elders on their phone, captures their stories, and surfaces them to the family. The elder's mobile app goes away; the family-side mobile app stays and gets repurposed. Plan 1 Tasks 2.3 (SarvamProvider), 2.5 (provider selector), and 9.3 (real-call smoke) are intentionally deferred; see `docs/superpowers/research/sarvam-capabilities.md` for the architectural rationale.
 
 **Authoritative sources, in order:**
 

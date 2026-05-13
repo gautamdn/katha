@@ -8,6 +8,14 @@
 
 **Tech Stack:** TypeScript, Deno (Edge Functions), Supabase (Postgres + Storage + pgvector), Sarvam AI (calling + STT + TTS), Anthropic Claude (Sonnet + Haiku), OpenAI embeddings, HuggingFace Inference API (pyannote speaker embeddings), Vitest (unit tests for new packages), Deno test (Edge Function tests).
 
+## Deferred tasks (intentionally not implemented in Plan 1)
+
+- **Task 2.3 (SarvamProvider):** The plan's HTTP shim assumes Sarvam has a `/voice-bot/start` endpoint. It does not — Sarvam is STT + TTS + LLM components, not a managed voice bot. See `docs/superpowers/research/sarvam-capabilities.md`. Production calling will use a Plivo + Pipecat sidecar + Sarvam composition; that's a Plan 1.5 follow-up.
+- **Task 2.5 (Provider selector):** Depends on 2.3.
+- **Task 9.3 (First real call smoke):** Manual operator task; awaits voice fixtures and a deployed environment.
+
+The mock-mode path implemented across Phases 4-9 is complete and end-to-end testable via `docs/superpowers/playbooks/mock-mode-smoke.md`.
+
 **Out of scope for this plan:** Mobile UI (Plan 2), Web UI (Plans 4/5), share links, digests, time-capsule sealing (Plan 3), billing (Plan 4). RLS for new tables is in this plan but mobile/web access isn't wired here.
 
 ---

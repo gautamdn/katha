@@ -173,3 +173,60 @@ export interface AIPrompt {
   category: string;
   why: string; // Brief explanation of why this prompt was suggested
 }
+
+// ─── Calling / Susheela Domain Types ─────────────────────
+
+export type ElderLanguage = 'kn' | 'gu' | 'en' | 'hi';
+export type ElderCountry = 'IN' | 'US';
+
+export type CallSpeaker = 'elder' | 'susheela';
+
+export type CallStatus =
+  | 'scheduled'
+  | 'dialing'
+  | 'in_progress'
+  | 'completed'
+  | 'voicemail'
+  | 'no_answer'
+  | 'declined'
+  | 'failed';
+
+export type CueKind = 'time_capsule' | 'advice' | 'distress' | 'cadence' | 'sharing_request';
+
+export interface TurnCues {
+  time_capsule?: { recipient?: string; condition?: string };
+  advice?: { topic?: string };
+  distress?: { severity: 'mild' | 'moderate' | 'severe' };
+  cadence?: { request: string };
+  sharing_request?: { recipient_label: string };
+}
+
+export type PersonaFactType =
+  | 'memory'
+  | 'opinion'
+  | 'advice'
+  | 'preference'
+  | 'relationship'
+  | 'event';
+
+export interface PersonaFact {
+  fact_type: PersonaFactType;
+  text: string;
+  source_turn_id: string;
+  language: string;
+  confidence: number;
+}
+
+export interface CallBrief {
+  elder_id: string;
+  elder_display_name: string;
+  preferred_name?: string;
+  relationship_label: string;
+  language: ElderLanguage;
+  is_first_call: boolean;
+  family_intro_audio_url?: string;
+  recent_summaries: string[];
+  family_suggested_questions: string[];
+  this_week_theme: string;
+  voiceprint?: number[];
+}
