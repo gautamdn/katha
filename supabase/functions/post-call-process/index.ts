@@ -14,6 +14,19 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')!;
 
 Deno.serve(async (req) => {
+  try {
+    return await handle(req);
+  } catch (e) {
+    const err = e as Error;
+    console.error('post-call-process unhandled error:', err.stack ?? err.message);
+    return new Response(
+      JSON.stringify({ error: err.message, stack: err.stack }),
+      { status: 500, headers: { ...CORS_HEADERS, 'content-type': 'application/json' } },
+    );
+  }
+});
+
+async function handle(req: Request): Promise<Response> {
   const cors = handleCorsPreflight(req);
   if (cors) return cors;
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
@@ -177,4 +190,4 @@ Deno.serve(async (req) => {
     status: 200,
     headers: { ...CORS_HEADERS, 'content-type': 'application/json' },
   });
-});
+}

@@ -12,3 +12,20 @@ port = 54322
 [studio]
 enabled = true
 port = 54323
+
+# Edge Functions
+# call-orchestrator handles inter-function calls (from schedule-call) and
+# external provider webhooks. Its /start path is auth-checked internally
+# (service-role bearer comparison in handleStart, see I2 fix). Its /webhook
+# path will need HMAC verification when real telephony providers connect
+# (Plan 1.5). For the mock-mode validation in Plan 1, gateway JWT
+# verification is disabled because the auto-injected SUPABASE_SERVICE_ROLE_KEY
+# is the modern opaque secret (sb_secret_...) which can't be parsed as a JWT
+# by the gateway, even though our internal Deno.env equality check still works.
+[functions.call-orchestrator]
+verify_jwt = false
+
+# post-call-process is invoked by call-orchestrator after a call ends. Same
+# inter-function rationale applies.
+[functions.post-call-process]
+verify_jwt = false
