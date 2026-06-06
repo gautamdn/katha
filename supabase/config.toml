@@ -29,3 +29,9 @@ verify_jwt = false
 # inter-function rationale applies.
 [functions.post-call-process]
 verify_jwt = false
+
+# plivo-answer is fetched by Plivo's voice gateway when an outbound call is
+# answered (Plan 1.5 hello-world dial). Plivo doesn't send a JWT; production
+# calling will validate Plivo's X-Plivo-Signature header instead (Plan 2.0).
+[functions.plivo-answer]
+verify_jwt = false
